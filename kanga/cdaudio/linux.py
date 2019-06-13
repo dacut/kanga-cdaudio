@@ -235,5 +235,5 @@ class LinuxCDROMDrive(CDROMDrive):
             flags = TrackFlags(cdte_ctrl)
 
         return TrackInformation(
-            track=track, type=track_type, flags=flags,
+            track=track, track_type=track_type, flags=flags,
             start_frame=te.cdte_addr.lba)

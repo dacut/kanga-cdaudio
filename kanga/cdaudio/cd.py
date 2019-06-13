@@ -1,7 +1,9 @@
 """
 Constants in the CD audio world.
 """
+from base64 import b64encode
 from enum import auto, Enum, IntFlag
+from hashlib import sha1
 from typing import NamedTuple, Tuple
 
 SECONDS_PER_MINUTE = 60
@@ -9,6 +11,7 @@ FRAMES_PER_SECOND = 75
 FRAMES_PER_MINUTE = FRAMES_PER_SECOND * SECONDS_PER_MINUTE
 BYTES_PER_FRAME = 2048      # Bytes per frame without error correction headers
 BYTES_PER_FRAME_RAW = 2352  # Bytes per frame with error correction headers
+GAP_FRAMES = 150            # Standard leadin gap size
 
 TRACK_MAX = 99
 INDEX_MAX = 99
@@ -39,7 +42,7 @@ class TrackInformation(NamedTuple):
     Information about a track.
     """
     track: int              # LEADOUT_TRACK (0xAA) if this is the leadout
-    type: TrackType
+    track_type: TrackType
     flags: TrackFlags
     start_frame: int
 
@@ -50,6 +53,34 @@ class DiscInformation(NamedTuple):
     first_track: int
     last_track: int
     track_information: Tuple[TrackInformation, ...]
+
+    @property
+    def musicbrainz_id(self) -> str:
+        """
+        The MusicBrainz disc ID.
+        """
+        leadout = self.track_information[-1]
+        assert leadout.track_type == TrackType.leadout
+
+        hasher = sha1(
+            f"{self.first_track:02X}{self.last_track:02X}"
+            f"{leadout.start_frame + GAP_FRAMES:08X}"
+            .encode("ascii"))
+
+        n_audio_tracks = 0
+        for track in self.track_information:
+            if track.track_type == TrackType.audio:
+                hasher.update(
+                    f"{track.start_frame + GAP_FRAMES:08X}".encode("ascii"))
+                n_audio_tracks += 1
+
+        # We always encode 99 track offsets; the remainder are 0.
+        for _ in range(n_audio_tracks, 99):
+            hasher.update(b"00000000")
+
+        return (
+            b64encode(hasher.digest(), altchars=b"._").replace(b"=", b"-")
+            .decode("ascii"))
 
 class MSF(NamedTuple):
     """
