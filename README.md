@@ -1,2 +1,2 @@
-# kanga-musicbrainz
-Python 3 interface to MusicBrainz
+# kanga-cdaudio
+Python 3 interface for handling CD audio.
