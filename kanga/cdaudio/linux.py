@@ -55,8 +55,8 @@ CDS_XA_2_2 = 104
 CDS_MIXED = 105
 
 # Special slot codes
-CDSL_NONE = c_int((1 << 31) - 2)
-CDSL_CURRENT = c_int((1 << 31) - 1)
+CDSL_NONE = ((1 << 31) - 2)
+CDSL_CURRENT = ((1 << 31) - 1)
 
 class cdrom_msf0(Structure):
     """
@@ -116,6 +116,8 @@ class LinuxCDROMDrive(CDROMDrive):
             ioctl_arg = c_ulong(0)
         elif isinstance(arg, (Structure, Union)):
             ioctl_arg = byref(arg)
+        else:
+            ioctl_arg = arg
 
         result = self._libc.ioctl(c_int(self.handle), c_ulong(cmd), ioctl_arg)
         if result < 0:
@@ -175,7 +177,7 @@ class LinuxCDROMDrive(CDROMDrive):
         
         self.ioctl(CDROM_SELECT_DISC, value)
     
-    def _get_status(self) -> DriveStatus:
+    def get_status(self) -> DriveStatus:
         status = self.ioctl(CDROM_DRIVE_STATUS, CDSL_CURRENT)
         if status == CDS_NO_DISC:
             return DriveStatus.no_disc
@@ -193,8 +195,8 @@ class LinuxCDROMDrive(CDROMDrive):
         tochdr = cdrom_tochdr()
         self.ioctl(CDROMREADTOCHDR, tochdr)
 
-        first_track = tochdr.cdth_trk0.value
-        last_track = tochdr.cdth_trk1.value
+        first_track = tochdr.cdth_trk0
+        last_track = tochdr.cdth_trk1
         track_information: List[TrackInformation] = []
 
         # Then iterate over the tracks
@@ -232,4 +234,4 @@ class LinuxCDROMDrive(CDROMDrive):
         
         return TrackInformation(
             track=track, type=track_type, flags=flags,
-            start_frame=te.cdte_addr.lba.value)
+            start_frame=te.cdte_addr.lba)

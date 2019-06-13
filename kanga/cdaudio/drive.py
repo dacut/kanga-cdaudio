@@ -3,7 +3,8 @@ Operating system agnotic drive control and CD data.
 """
 from enum import Enum, auto
 import os
-from typing import Optional, Tuple, Union
+from platform import system
+from typing import Optional, Tuple, Union, TypeVar, Type
 from .cd import DiscInformation, MSF, TrackInformation
 
 class DriveStatus(Enum):
@@ -13,6 +14,7 @@ class DriveStatus(Enum):
     tray_open = auto()
     not_ready = auto()
 
+T = TypeVar("T", bound="CDROMDrive")
 class CDROMDrive:
     """
     Class for interacting with a compact disc drive.
@@ -21,7 +23,22 @@ class CDROMDrive:
     actions (e.g. spinning up a disc) to make users aware these are potentially
     expensive actions.
     """
+    def __new__(cls, *args, **kw):
+        if cls == CDROMDrive:
+            plat = system()
+            if plat == "Linux":
+                from .linux import LinuxCDROMDrive
+                concrete = LinuxCDROMDrive
+            else:
+                raise RuntimeError(
+                    f"Cannot instantiate CDROMDrive on platform {plat}")
+        else:
+            concrete = cls
+        
+        return super(CDROMDrive, cls).__new__(concrete)
+
     def __init__(self, handle: int, owned: bool) -> None:
+        super(CDROMDrive, self).__init__()
         self._handle: int = handle
         self._owned: bool = owned
 
@@ -109,7 +126,7 @@ class CDROMDrive:
         """
         Return the current status of the drive/selected slot.
         """
-        raise NotImplemenetedError()
+        raise NotImplementedError()
 
     def get_disc_information(self) -> DiscInformation:
         """
@@ -117,7 +134,7 @@ class CDROMDrive:
         """
         raise NotImplementedError()
     
-    def get_track_info(self, track: int) -> TrackInformation:
+    def get_track_information(self, track: int) -> TrackInformation:
         """
         Return information about the specified track. track is the CD-based
         identifier of the track, starting at disc_information.first_track
@@ -140,3 +157,15 @@ class CDROMDrive:
         is destroyed).
         """
         return self._owned
+
+    @classmethod
+    def from_filename(cls: Type[T], filename: str) -> T:
+        """
+        Create a CDROMDrive object by opening the specified filename.
+        """
+        fd = os.open(filename, os.O_RDONLY)
+        try:
+            return cls(fd, True)
+        except:
+            os.close(fd)
+            raise
