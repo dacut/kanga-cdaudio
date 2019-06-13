@@ -1,15 +1,15 @@
 """
 Linux-specific functionality.
 """
+# pylint: disable=C0103,R0903
 from ctypes import (
     CDLL, byref, c_int, c_uint8, c_ulong, get_errno, Structure, Union)
 from os import strerror
-from typing import Any, Optional
+from typing import Any, List, Optional
 
 from .cd import (
-    DiscInformation, LEADOUT_TRACK, MSF, TrackFlags, TrackIndex,
-    TrackInformation, TrackType
-)
+    DiscInformation, LEADOUT_TRACK, MSF, TrackFlags, TrackInformation,
+    TrackType)
 from .drive import CDROMDrive, DriveStatus
 
 # From linux/cdrom.h
@@ -104,14 +104,16 @@ class LinuxCDROMDrive(CDROMDrive):
     """
     Linux-specific code for handling CD-ROM drives.
     """
+    # pylint: disable=W0201
+
     def __init__(self, handle: int, owned: bool) -> None:
         super(LinuxCDROMDrive, self).__init__(handle=handle, owned=owned)
         self._libc = CDLL("libc.so.6", use_errno=True)
         self._libc.ioctl.restype = c_int
-    
-    def ioctl(self, cmd: int, arg: Optional[Any] = None) -> int:
+
+    def _ioctl(self, cmd: int, arg: Optional[Any] = None) -> int:
         if isinstance(arg, int):
-            ioctl_arg: Union[c_ulong, "CArgObject"] = c_ulong(arg)
+            ioctl_arg: Any = c_ulong(arg)
         elif arg is None:
             ioctl_arg = c_ulong(0)
         elif isinstance(arg, (Structure, Union)):
@@ -123,22 +125,22 @@ class LinuxCDROMDrive(CDROMDrive):
         if result < 0:
             errno = get_errno()
             raise IOError(errno, strerror(errno))
-        
+
         return result
 
     def play(self) -> None:
-        self.ioctl(CDROMRESUME)
-    
+        self._ioctl(CDROMRESUME)
+
     def pause(self) -> None:
-        self.ioctl(CDROMPAUSE)
+        self._ioctl(CDROMPAUSE)
 
     def stop(self) -> None:
-        self.ioctl(CDROMSTOP)
+        self._ioctl(CDROMSTOP)
 
     def seek(self, position: MSF) -> None:
         if not isinstance(position, MSF):
             raise TypeError("position must be an MSF instance")
-        
+
         if not position.is_valid:
             raise ValueError("position is invalid")
 
@@ -146,39 +148,39 @@ class LinuxCDROMDrive(CDROMDrive):
         # returns EINVAL from the SCSI driver. The SG_IO SEEK command requires
         # root privileges.
         # msf = cdrom_msf()
-        # self.ioctl(CDROMSEEK, msf)
+        # self._ioctl(CDROMSEEK, msf)
 
         raise NotImplementedError("Linux does not implement seek")
-    
+
     def eject(self) -> None:
-        self.ioctl(CDROMEJECT)
-    
+        self._ioctl(CDROMEJECT)
+
     def close_tray(self) -> None:
-        self.ioctl(CDROMCLOSETRAY)
+        self._ioctl(CDROMCLOSETRAY)
 
     def lock(self) -> None:
-        self.ioctl(CDROM_LOCKDOOR, 1)
+        self._ioctl(CDROM_LOCKDOOR, 1)
 
     def unlock(self) -> None:
-        self.ioctl(CDROM_LOCKDOOR, 0)
-    
+        self._ioctl(CDROM_LOCKDOOR, 0)
+
     def reset(self) -> None:
-        self.ioctl(CDROMRESET)
+        self._ioctl(CDROMRESET)
 
     def _get_slot_count(self) -> int:
-        return self.ioctl(CDROM_CHANGER_NSLOTS)
+        return self._ioctl(CDROM_CHANGER_NSLOTS)
 
     def select_slot(self, value: int) -> None:
         if not isinstance(value, int):
             raise TypeError("slot must be an integer")
-        
+
         if value < 0:
             raise ValueError("slot must be non-negative")
-        
-        self.ioctl(CDROM_SELECT_DISC, value)
-    
+
+        self._ioctl(CDROM_SELECT_DISC, value)
+
     def get_status(self) -> DriveStatus:
-        status = self.ioctl(CDROM_DRIVE_STATUS, CDSL_CURRENT)
+        status = self._ioctl(CDROM_DRIVE_STATUS, CDSL_CURRENT)
         if status == CDS_NO_DISC:
             return DriveStatus.no_disc
         if status == CDS_TRAY_OPEN:
@@ -187,13 +189,13 @@ class LinuxCDROMDrive(CDROMDrive):
             return DriveStatus.not_ready
         if status == CDS_DISC_OK:
             return DriveStatus.ok
-        
+
         return DriveStatus.unknown
 
     def get_disc_information(self) -> DiscInformation:
         # Get the first and last track numbers
         tochdr = cdrom_tochdr()
-        self.ioctl(CDROMREADTOCHDR, tochdr)
+        self._ioctl(CDROMREADTOCHDR, tochdr)
 
         first_track = tochdr.cdth_trk0
         last_track = tochdr.cdth_trk1
@@ -205,7 +207,7 @@ class LinuxCDROMDrive(CDROMDrive):
 
         # And get the leadout.
         track_information.append(self.get_track_information(LEADOUT_TRACK))
-    
+
         return DiscInformation(first_track=first_track, last_track=last_track,
                                track_information=tuple(track_information))
 
@@ -217,8 +219,8 @@ class LinuxCDROMDrive(CDROMDrive):
         te.cdte_addr.lba = 0
         te.cdte_datamode = 0
 
-        self.ioctl(CDROMREADTOCENTRY, te)
-        
+        self._ioctl(CDROMREADTOCENTRY, te)
+
         # The control field minus the ADR bits.
         cdte_ctrl = (te.cdte_adr_ctrl & 0xf0) >> 4
 
@@ -231,7 +233,7 @@ class LinuxCDROMDrive(CDROMDrive):
         else:
             track_type = TrackType.audio
             flags = TrackFlags(cdte_ctrl)
-        
+
         return TrackInformation(
             track=track, type=track_type, flags=flags,
             start_frame=te.cdte_addr.lba)

@@ -27,6 +27,7 @@ class TrackFlags(IntFlag):
     """
     Flags applied to a track.
     """
+    # pylint: disable=C0326
     QUAD_CHANNEL =      0b1000  # Audio tracks only
     DATA_TRACK =        0b0100
     COPY_PERMITTED =    0b0010
@@ -48,7 +49,7 @@ class DiscInformation(NamedTuple):
     """
     first_track: int
     last_track: int
-    track_information: Tuple[TrackInformation]
+    track_information: Tuple[TrackInformation, ...]
 
 class MSF(NamedTuple):
     """
@@ -74,6 +75,7 @@ class MSF(NamedTuple):
         Indicates whether this position is valid: all fields are non-negative,
         frame < 75, and second < 60.
         """
+        # pylint: disable=C0122
         return (0 <= self.minute and
                 0 <= self.second < SECONDS_PER_MINUTE and
                 0 <= self.frame < FRAMES_PER_SECOND)
@@ -87,17 +89,44 @@ class MSF(NamedTuple):
         second, frame = divmod(frame, FRAMES_PER_SECOND)
         return MSF(minute=minute, second=second, frame=frame)
 
-class TrackIndex(NamedTuple):
+class TrackIndex:
     """
     Position on a disc specified in track and index.
     """
-    track: int
-    index: int
+    __slots__ = ("_track", "_index")
+
+    def __init__(self, track: int, index: int) -> None:
+        super(TrackIndex, self).__init__()
+        if not isinstance(track, int):
+            raise TypeError("track must be an int")
+
+        if not 0 <= track <= TRACK_MAX:
+            raise ValueError(
+                f"track must be between 0 and {TRACK_MAX}, inclusive: {track}")
+
+        if not isinstance(index, int):
+            raise TypeError("index must be an int")
+
+        if not 0 <= index <= INDEX_MAX:
+            raise ValueError(
+                f"index must be between 0 and {INDEX_MAX}, inclusive: {index}")
+
+        self._track = track
+        self._index = index
 
     @property
-    def is_valid(self):
+    def track(self) -> int:
         """
-        Indicates whether this track and index are valid: both fields are
-        between 0 and 99, inclusive.
+        The track on the disc.
         """
-        return (0 <= self.track <= TRACK_MAX and 0 <= self.index <= INDEX_MAX)
+        return self._track
+
+    @property
+    def index(self) -> int:
+        """
+        The index within the track.
+        """
+        return self._index
+
+    def __repr__(self) -> str:
+        return f"TrackIndex(track={self.track}, index={self.index})"
