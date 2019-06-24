@@ -27,9 +27,9 @@ setup(
         "Topic :: Software Development :: Libraries :: Python Modules"
     ],
     keywords='compact-disc musicbrainz',
-    packages=['kanga.cdudio'],
+    packages=['kanga.cdaudio'],
     python_requires='>=3.6',
-    install_requires=["requests"],
+    install_requires=["musicbrainzngs", "requests"],
     setup_requires=["nose>=1.0"],
     tests_require=["coverage>=4.0", "nose>=1.0"],
 )
